@@ -1,0 +1,66 @@
+const { Telegraf } = require("telegraf");
+const puppeteer = require("puppeteer");
+
+const bot = new Telegraf("7604789515:AAH5rycuF8UNJddnDIjb6wHiM4RV3Tds7y8");
+
+bot.start((ctx) => {
+  ctx.reply("📸 Send any public Instagram post or reel link to download!");
+});
+
+bot.on("text", async (ctx) => {
+  const url = ctx.message.text.trim();
+
+  if (!url.includes("instagram.com")) {
+    return ctx.reply("❌ Please send a valid Instagram link.");
+  }
+
+  try {
+    const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
+    const page = await browser.newPage();
+    await page.goto("https://snapinsta.app/", { waitUntil: "networkidle2" });
+
+    await page.type("#url", url);
+    await page.click("button[type=submit]");
+
+    await page.waitForSelector(".download-buttons a", { timeout: 10000 });
+    const links = await page.$$eval(".download-buttons a", as => as.map(a => a.href));
+
+    await browser.close();
+
+    for (const link of links) {
+      if (link.includes(".mp4")) {
+        await ctx.replyWithVideo({ url: link });
+      } else {
+        await ctx.replyWithPhoto({ url: link });
+      }
+    }
+  } catch (err) {
+    console.error("Error:", err.message);
+    ctx.reply("❌ Failed to download. Try again with a valid public link.");
+  }
+});
+
+bot.launch();
+
+{
+  "name": "nae-insta-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.3.8",
+    "telegraf": "^4.12.2"
+  }
+}
+services:
+  - type: web
+    name: nae-insta-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18
